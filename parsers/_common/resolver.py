@@ -1,7 +1,13 @@
-"""Shared name → orgnr resolver for unresolved rows in funding-source parsers.
+"""Standalone name → orgnr resolver — NOT used by any parser in this repo.
 
-Resolves a Norwegian organization name to a 9-digit orgnr by joining
-against two name catalogues:
+This module exists as a tool for downstream consumers and ad-hoc query-time
+work. **No parser in this repo calls it.** Each parser preserves the source
+LUAS as-observed: an orgnr column is populated only when the source itself
+provides one, never inferred via cross-pipeline name match. Cross-pipeline
+joining is a query-time concern, not a write-time one.
+
+When you do want to resolve names downstream, you can import this module
+or run it as a standalone step. It joins against two name catalogues:
 
 1. **Enhetsregisteret current snapshot** at
    ``gs://{bucket}/enheter/parsed/v1/state/{date}.parquet`` —
@@ -10,8 +16,7 @@ against two name catalogues:
 2. **Foretakshendelser pool** at
    ``gs://{bucket}/foretakshendelser/state/pool.parquet`` —
    historical foretaksnavn for ~1.3M orgnrs including dissolved
-   firms, recovers entities that no longer appear in the current
-   register.
+   firms.
 
 Resolution strategy
 -------------------

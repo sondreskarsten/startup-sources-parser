@@ -56,7 +56,6 @@ GCS_BUCKET = os.environ.get("GCS_BUCKET", "sondre_brreg_data")
 GCS_PREFIX_RAW = "innovasjon_norge/raw"
 GCS_PREFIX_STATE = "innovasjon_norge/state"
 SNAPSHOT_DATE = os.environ.get("SNAPSHOT_DATE", "")
-RESOLVE_NAMES = os.environ.get("RESOLVE_NAMES", "1") not in ("0", "false", "False", "")
 
 
 def normalize_orgnr(value):
@@ -262,17 +261,10 @@ def main():
 
     body = download_csv(bucket, snapshot)
     df = parse_csv(body, snapshot)
-    if RESOLVE_NAMES:
-        df = df.rename(columns={"bedriftsnavn": "_bedriftsnavn"})
-        df["org_name_raw"] = df["_bedriftsnavn"]
-        from _common.resolver import resolve_names
-        df = resolve_names(df, name_col="org_name_raw", orgnr_col="orgnr",
-                           bucket_name=GCS_BUCKET)
-        df = df.rename(columns={"_bedriftsnavn": "bedriftsnavn"}).drop(columns=["org_name_raw"])
     n_orgnr = df["orgnr"].notna().sum()
     n_distinct = df["orgnr"].nunique()
     print(
-        f"  parsed: {len(df):,} rows; {n_orgnr:,} with orgnr; "
+        f"  parsed: {len(df):,} rows; {n_orgnr:,} with orgnr (from Org-nr); "
         f"{n_distinct:,} distinct orgnrs",
         flush=True,
     )

@@ -1,10 +1,12 @@
-"""Parser for Prosjektbanken JSONL.gz → unified parquet of NO orgnrs.
+"""Parser for Prosjektbanken JSONL.gz → unified parquet of project participations.
 
 Reads the gzipped JSONL files written by ``startup-sources-collector``
-(``sources/prosjektbanken``), expands each project's ``organisations``
-array to one row per (project, organisation) participation, applies
-the shared ``_common.resolver`` to map organisation names to orgnrs,
-and emits a parquet partitioned by source (FORISS / EU / SKATTEFUNN).
+(``sources/prosjektbanken``) and expands each project's ``organisations``
+array to one row per (project, organisation) participation. The
+Prosjektbanken JSON does not carry organisasjonsnummer for any record —
+only organisation names — so ``orgnr`` is always null in this parser's
+output. Name → orgnr resolution is a separate downstream concern
+(query-time view or a dedicated resolver pipeline).
 
 Input
 -----
@@ -15,7 +17,7 @@ Each JSONL line is one project record::
     {
       "id": <int>,
       "title": <str>,
-      "organisations": [{"name": <str>, "role": <str>, ...}, ...],
+      "organisations": [...],          # list-of-lists for FORISS/EU; absent for legacy SKATTEFUNN
       "yearsActive": [<int>, ...],
       "geographies": [...],
       "disciplines": [...],
@@ -38,8 +40,7 @@ Columns::
     project_title (str)
     org_name_raw (str)                 # name as observed in source
     org_role (str)                     # PROSJEKTANSVARLIG / SAMARBEIDSPARTNER / etc.
-    orgnr (str, 9-digit zero-padded; nullable)
-    orgnr_source (str)                 # how orgnr was obtained
+    orgnr (str)                        # ALWAYS NULL — source has no orgnr
     years_active (list of int)
     current_activity (str)
     total_funding_nok (float; NaN if redacted/-1)
@@ -56,8 +57,6 @@ SNAPSHOT_DATE : str or None
     Override; else picks the latest snapshot per kilde.
 KILDER : str
     Comma-separated kilde codes. Default ``FORISS,EU,SKATTEFUNN``.
-RESOLVE_NAMES : str
-    ``"1"`` to enable name → orgnr resolution. Default ``"1"``.
 """
 
 import gzip
@@ -80,7 +79,6 @@ KILDER = [
     for k in os.environ.get("KILDER", "FORISS,EU,SKATTEFUNN").split(",")
     if k.strip()
 ]
-RESOLVE_NAMES = os.environ.get("RESOLVE_NAMES", "1") not in ("0", "false", "False", "")
 
 
 def latest_snapshot(bucket, kilde):
@@ -326,7 +324,6 @@ def main():
     print(f"  prosjektbanken-parser", flush=True)
     print(f"  bucket: {GCS_BUCKET}", flush=True)
     print(f"  kilder: {KILDER}", flush=True)
-    print(f"  resolve_names: {RESOLVE_NAMES}", flush=True)
     print(f"  {date.today().isoformat()}", flush=True)
     print(f"{'=' * 60}", flush=True)
 
@@ -341,15 +338,10 @@ def main():
         print(f"  records: {len(records):,}", flush=True)
         df = expand_to_participations(records, kilde, snapshot)
         print(f"  participations: {len(df):,}", flush=True)
-        if RESOLVE_NAMES:
-            from _common.resolver import resolve_names
-            df = resolve_names(df, name_col="org_name_raw", orgnr_col="orgnr",
-                               bucket_name=GCS_BUCKET)
-        n_orgnr = df["orgnr"].notna().sum()
-        n_distinct = df["orgnr"].nunique()
+        n_with_name = df["org_name_raw"].notna().sum()
         print(
-            f"  {kilde}: {len(df):,} rows, {n_orgnr:,} with orgnr, "
-            f"{n_distinct:,} distinct orgnrs",
+            f"  {kilde}: {len(df):,} rows, {n_with_name:,} with org_name_raw, "
+            f"orgnr always null (source has no orgnr field)",
             flush=True,
         )
         write_parquet(
@@ -359,11 +351,10 @@ def main():
 
     if all_frames:
         combined = pd.concat(all_frames, ignore_index=True)
-        n_orgnr = combined["orgnr"].notna().sum()
-        n_distinct = combined["orgnr"].nunique()
+        n_with_name = combined["org_name_raw"].notna().sum()
         print(
             f"\n  combined: {len(combined):,} rows across {len(KILDER)} kilder; "
-            f"{n_orgnr:,} with orgnr; {n_distinct:,} distinct orgnrs",
+            f"{n_with_name:,} with org_name_raw",
             flush=True,
         )
         write_parquet(combined, bucket, f"{GCS_PREFIX_STATE}/all/{today}.parquet")
