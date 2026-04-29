@@ -61,6 +61,13 @@ SNAPSHOT_DATE = os.environ.get("SNAPSHOT_DATE", "")
 def normalize_orgnr(value):
     """Convert any orgnr-shaped value to a 9-digit zero-padded string.
 
+    Innovasjon Norge stores orgnrs in an 11-digit format with two
+    leading zeros (e.g. ``00929918959`` for orgnr ``929918559``). The
+    parser strips non-digits and takes the last 9 digits when the
+    digit count is between 9 and 11. Personal sole-proprietorships
+    (ENK without registered orgnr) appear as null values and are
+    preserved as null.
+
     Parameters
     ----------
     value : Any
@@ -75,10 +82,13 @@ def normalize_orgnr(value):
     if not s:
         return None
     digits = re.sub(r"\D", "", s)
-    if not digits or len(digits) > 9:
+    if not digits:
         return None
-    digits = digits.zfill(9)
-    return digits if len(digits) == 9 else None
+    if len(digits) >= 9 and len(digits) <= 11:
+        tail = digits[-9:]
+        if tail.isdigit() and len(tail) == 9:
+            return tail
+    return None
 
 
 def parse_amount(value):

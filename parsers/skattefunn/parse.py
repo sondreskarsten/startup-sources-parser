@@ -206,8 +206,10 @@ def _historical_godkjent(df):
     """Resolve godkjent boolean from the historical file's two columns.
 
     The historical file uses ``Søknad godkjent`` and ``Søknad avslått``
-    as separate boolean columns. Some rows have both null (undecided
-    or returned for revision) — those return ``pd.NA``.
+    as separate string columns containing ``"JA"`` / ``"NEI"`` /
+    ``NaN``. Both null means undecided/in-process and returns
+    ``pd.NA``. Inconsistent (both JA or both NEI) also returns
+    ``pd.NA``.
 
     Parameters
     ----------
@@ -219,15 +221,15 @@ def _historical_godkjent(df):
     pandas.Series
         Nullable boolean series.
     """
-    g = df["Søknad godkjent"]
-    a = df["Søknad avslått"]
+    g = df["Søknad godkjent"].astype(str).str.strip().str.upper()
+    a = df["Søknad avslått"].astype(str).str.strip().str.upper()
     out = []
     for gv, av in zip(g, a):
-        gtrue = bool(gv) if pd.notna(gv) else False
-        atrue = bool(av) if pd.notna(av) else False
-        if gtrue and not atrue:
+        gja = gv == "JA"
+        aja = av == "JA"
+        if gja and not aja:
             out.append(True)
-        elif atrue and not gtrue:
+        elif aja and not gja:
             out.append(False)
         else:
             out.append(pd.NA)

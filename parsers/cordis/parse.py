@@ -61,6 +61,7 @@ PROGRAMMES : str
     Comma-separated programme codes. Default ``fp7,h2020,horizon``.
 """
 
+import csv
 import io
 import os
 import re
@@ -191,13 +192,15 @@ def parse_programme(zip_body, programme, snapshot_date):
             org = pd.read_csv(
                 f, sep=";", encoding="utf-8",
                 dtype=str, keep_default_na=False, na_values=[""],
-                low_memory=False,
+                quoting=csv.QUOTE_ALL, engine="python",
+                on_bad_lines="skip",
             )
         with zf.open("project.csv") as f:
             proj = pd.read_csv(
                 f, sep=";", encoding="utf-8",
                 dtype=str, keep_default_na=False, na_values=[""],
-                low_memory=False,
+                quoting=csv.QUOTE_ALL, engine="python",
+                on_bad_lines="skip",
             )
 
     org_no = org[org["country"].str.upper() == "NO"].copy()
