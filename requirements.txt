@@ -1,0 +1,4 @@
+pandas
+pyarrow
+openpyxl
+google-cloud-storage
