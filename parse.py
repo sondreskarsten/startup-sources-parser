@@ -47,6 +47,7 @@ def main():
         sys.exit(1)
 
     sys.path.insert(0, src_path)
+    sys.path.insert(0, os.path.join(here, "parsers"))
 
     spec = importlib.util.spec_from_file_location(
         f"{SOURCE}_parse", os.path.join(src_path, "parse.py"),

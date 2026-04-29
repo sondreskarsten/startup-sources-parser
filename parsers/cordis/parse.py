@@ -82,6 +82,7 @@ PROGRAMMES = [
     for p in os.environ.get("PROGRAMMES", "fp7,h2020,horizon").split(",")
     if p.strip()
 ]
+RESOLVE_NAMES = os.environ.get("RESOLVE_NAMES", "1") not in ("0", "false", "False", "")
 
 
 def normalize_orgnr_from_vat(value):
@@ -303,6 +304,7 @@ def main():
     print(f"  cordis-parser", flush=True)
     print(f"  bucket: {GCS_BUCKET}", flush=True)
     print(f"  programmes: {PROGRAMMES}", flush=True)
+    print(f"  resolve_names: {RESOLVE_NAMES}", flush=True)
     print(f"  {date.today().isoformat()}", flush=True)
     print(f"{'=' * 60}", flush=True)
 
@@ -315,6 +317,10 @@ def main():
         print(f"  --- {programme} (snapshot {snapshot}) ---", flush=True)
         body = download_zip_bytes(bucket, programme, snapshot)
         df = parse_programme(body, programme, snapshot)
+        if RESOLVE_NAMES:
+            from _common.resolver import resolve_names
+            df = resolve_names(df, name_col="org_name_raw", orgnr_col="orgnr",
+                               bucket_name=GCS_BUCKET)
         n_orgnr = df["orgnr"].notna().sum()
         n_distinct = df["orgnr"].nunique()
         print(
